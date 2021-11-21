@@ -24,6 +24,7 @@ def proc_axis(hawk, progress_callback):
   new_smpl_dt = 1e-3
   new_data = [[0],[0]]
   samples_per_window = 7
+  lasso = linear_model.Lasso(alpha, copy_X = False, warm_start = True, tol = 1e-3, max_iter = 100)
 
   cc = 0
   for sample in hawk.T:
@@ -51,8 +52,6 @@ def proc_axis(hawk, progress_callback):
       targets =  sample_weights * np.array([w[2] for w in window])[np.newaxis].T
 
       # solve it using RLS
-      lasso = linear_model.Lasso(alpha, copy_X = False, tol = 1e-3, max_iter = 100)
-
       with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=ConvergenceWarning)
         fit = lasso.fit(equations, targets)
