@@ -1,71 +1,84 @@
-import warnings
+import itertools
 import numpy as np
-from sklearn import linear_model
-from sklearn.exceptions import ConvergenceWarning
+from scipy.optimize import least_squares
+from concurrent.futures import ThreadPoolExecutor
 
-def blackman(a):
-  a_0 = .35875
-  a_1 = .48829
-  a_2 = .14128
-  a_3 = .01168
-  x=np.maximum(np.minimum(a,1.),0.)
-  return a_0 - a_1 * np.cos(2 * np.pi * x) + a_2 * np.cos(4 * np.pi * x) - a_3 * np.cos(6 * np.pi * x)
+def motion_model(timestamps, tvels, init=None):
+  def m(accs):
+    dts = timestamps[1:] - timestamps[:-1]
+    vels = np.zeros_like(tvels)
+    vels[0] =  tvels[0] if init is None else init
+    vels[1:] = np.cumsum(accs * dts) + vels[0]
+    return vels
 
-def gen_basis_cos(t, state_size):
-  hertz = np.arange(0, state_size)
-  basis = np.cos(hertz * t * 2 * np.pi)
-  return basis
+  def evaluate(accs):
+    return m(accs) - tvels
 
-def proc_axis(hawk, progress_callback):
-  alpha = 1e-3
-  state_size = 500
-  window_size = .1
+  def predict(accs, tss):
+    return np.interp(tss, timestamps, m(accs))
+
+  return (evaluate, predict)
+
+def proc_axis(hawk):
+  # cleanup
+  clusters = [[0]]
+  critical_dt = 3e-3
+  min_cluster_length = 16
+  for i in range(1,len(hawk[0])):
+    if hawk[0][i] - hawk[0][i-1] > critical_dt:
+      clusters.append([])
+    clusters[-1].append(i)
+  total_clusters = len(clusters)
+  clusters = list(filter(lambda x: len(x) > min_cluster_length, clusters))
+  good_samples = list(itertools.chain.from_iterable(clusters))
+
+  print('Clusters discarded ', int(100 - len(clusters) / total_clusters * 100), '%')
+  print('Samples discarded ', int(100 - len(good_samples) / len(hawk[0]) * 100), '%')
+
+  hawk = hawk[:, good_samples]
+
+  window_size = 100
   window = []
   new_smpl_dt = 1e-3
   new_data = [[0],[0]]
-  samples_per_window = 7
-  lasso = linear_model.Lasso(alpha, copy_X = False, warm_start = True, tol = 1e-3, max_iter = 100)
+  max_force = 3
+
+  next_init = None
 
   cc = 0
   for sample in hawk.T:
     time, value = sample[0], sample[1]
 
-    # add new data into window
-    basis = gen_basis_cos(time, state_size)
-    window.append((time, basis, value))
-    
-    # drop old data from window
-    if len(window) >= 2:
-      i = 0
-      while window[-1][0] - window[i + 1][0] > window_size + new_smpl_dt:
-        i += 1
-      window = window[i:]
+    if len(window) < window_size: 
+      window.append((time, value))
+      continue
 
     # generate new samples
-    while new_data[0][-1] + new_smpl_dt < time - window_size / 2:
-      new_time = new_data[0][-1] + new_smpl_dt * (samples_per_window // 2 + 1)
-      window_begin, window_end = new_time - window_size / 2, new_time + window_size / 2
+    state = np.zeros(len(window) - 1)
+    window_snapshot = np.array(window, dtype=np.float64)
+    residuals, predict = motion_model(window_snapshot[:,0], window_snapshot[:,1], next_init)
 
-      # construct a least-squares problem
-      sample_weights = np.expand_dims(np.array([blackman((w[0] - window_begin) / window_size) for w in window]), 1)
-      equations = sample_weights * np.array([w[1] for w in window], dtype=np.float64)
-      targets =  sample_weights * np.array([w[2] for w in window])[np.newaxis].T
+    result = least_squares(residuals, state, bounds = (-max_force, max_force),  method='trf', ftol=1e-2, loss='soft_l1')
+    accs = result.x
 
-      # solve it using RLS
-      with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=ConvergenceWarning)
-        fit = lasso.fit(equations, targets)
-      sol = fit.coef_
+    calc_end = (window[-1][0]*3 + window[0][0]) / 4
+    new_smpl_times = np.arange(new_data[0][-1], calc_end, new_smpl_dt)
+    new_smpl_vals = predict(accs, new_smpl_times)
 
-      for i in range(samples_per_window):
-        sample_time =  new_time + (i - samples_per_window // 2) * new_smpl_dt
-        new_data[0].append(sample_time)
-        new_data[1].append(gen_basis_cos(sample_time, state_size) @ sol)
+    new_data[0].extend(new_smpl_times)
+    new_data[1].extend(new_smpl_vals)
+  
+    # drop samples from window
+    drop_max = np.searchsorted(window_snapshot[:,0], calc_end) - 1
+    window = window[drop_max:]
 
-    if cc % 1024 == 0:
-      progress_callback((time - hawk[0][0]) / (hawk[0][-1] - hawk[0][0]) * 100)
+    next_init = predict(accs, [window[0][0]])[0]
+
+    if cc % 100 == 0:
+      print((time - hawk[0][0]) / (hawk[0][-1] - hawk[0][0]) * 100)
     cc += 1
   return np.array(new_data, dtype = np.float64)
+
 
 def proc_all(hawk_data):
   old_x = 0
@@ -81,10 +94,14 @@ def proc_all(hawk_data):
   hawk_X = hawk_data[[0,1],:]
   hawk_Y = hawk_data[[0,2],:]
   hawk_Z = hawk_data[[0,3],:]
-  fixed_X = proc_axis(hawk_X, progress_cb)
-  base_x = 1/3 * 100
-  fixed_Y = proc_axis(hawk_Y, progress_cb)
-  base_x = 2/3 * 100
-  fixed_Z = proc_axis(hawk_Z, progress_cb)
+
+  with ThreadPoolExecutor(max_workers=3) as executor:
+      future_X = executor.submit(proc_axis, hawk_X)
+      future_Y = executor.submit(proc_axis, hawk_Y)
+      future_Z = executor.submit(proc_axis, hawk_Z)
+
+      fixed_X = future_X.result()
+      fixed_Y = future_Y.result()
+      fixed_Z = future_Z.result()
 
   return np.vstack((fixed_X[0], fixed_X[1], fixed_Y[1], fixed_Z[1]))
