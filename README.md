@@ -31,3 +31,15 @@ You can also try disabling the thumbnail video stream (the one with AB suffix, b
 2. Run `python main.py <your hawkeye csv file>.csv <output csv name>.csv`
 
 
+## How to check your gyro log quality
+
+There's a script called `analyze.py`, it shows a plot of time vs time from previous gyro sample.
+It takes the name of your log as an argument. If most of the peaks in the log are less than 0.025 than we say that it is a good log.
+
+A more or less **GOOD** log looks like that:
+
+![Good log](img/good_log.png)
+
+And a **BAD** log looks something like that:
+
+![Bad log](img/bad_log.png)
