@@ -38,8 +38,14 @@ It takes the name of your log as an argument. If most of the peaks in the log ar
 
 A more or less **GOOD** log looks like that:
 
+It has been logged on Sandisk Extreme A1 32GB
+
 ![Good log](img/good_log.png)
 
 And a **BAD** log looks something like that:
 
+It has been logged on Sandisk Extreme Pro A2 128GB
+
 ![Bad log](img/bad_log.png)
+
+So we see that a more expensive SD card is not a better card.
