@@ -11,6 +11,9 @@ def blackman(a):
   x=np.maximum(np.minimum(a,1.),0.)
   return a_0 - a_1 * np.cos(2 * np.pi * x) + a_2 * np.cos(4 * np.pi * x) - a_3 * np.cos(6 * np.pi * x)
 
+def polywindow(a):
+  return 1-(a*2-1)**2
+
 def gen_basis_cos(t, state_size):
   hertz = np.arange(0, state_size)
   basis = np.cos(hertz * t * 2 * np.pi)
@@ -23,7 +26,7 @@ def proc_axis(hawk, progress_callback):
   window = []
   new_smpl_dt = 1e-3
   new_data = [[0],[0]]
-  samples_per_window = 7
+  samples_per_window = 15
   lasso = linear_model.Lasso(alpha, copy_X = False, warm_start = True, tol = 1e-3, max_iter = 100)
 
   cc = 0
@@ -57,10 +60,9 @@ def proc_axis(hawk, progress_callback):
         fit = lasso.fit(equations, targets)
       sol = fit.coef_
 
-      for i in range(samples_per_window):
-        sample_time =  new_time + (i - samples_per_window // 2) * new_smpl_dt
-        new_data[0].append(sample_time)
-        new_data[1].append(gen_basis_cos(sample_time, state_size) @ sol)
+      sample_times = new_time + (np.arange(samples_per_window)- samples_per_window // 2) * new_smpl_dt
+      new_data[0].extend(list(sample_times))
+      new_data[1].extend(fit.predict(gen_basis_cos(np.expand_dims(sample_times, 1), state_size)))
 
     if cc % 1024 == 0:
       progress_callback((time - hawk[0][0]) / (hawk[0][-1] - hawk[0][0]) * 100)
