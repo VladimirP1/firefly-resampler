@@ -7,7 +7,6 @@ import numpy as np
 
 hawk_data = camio.read_hawk(sys.argv[1])
 hawk_synced = find_sync.fix_sync(hawk_data)
-find_sync.find_sync(hawk_synced[0])
 hawk_fixed = resampler.proc_all(hawk_synced)
 camio.write_hawk(sys.argv[2], hawk_fixed)
 

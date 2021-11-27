@@ -72,7 +72,7 @@ def find_sync(timestamps):
     print(data[0])
 
     def calc_shift(x):
-        return (fit.predict(gen_basis_cos((x - s_start) / (s_end - s_start), state_size_compensated)) - - fitted_mean) / 1000 + timestamps[0]
+        return (fit.predict(gen_basis_cos((x - s_start) / (s_end - s_start), state_size_compensated)) - fitted_mean) / 1000 + timestamps[0]
 
     return calc_shift
 
