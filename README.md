@@ -13,7 +13,7 @@ That's what you can do to get best possible logs
 
 ### Correctly format your SD card
 **Format your SD card with EXFAT**. Even if it is <= 32GB, do that. Exfat is simply faster.
-**Choose a large cluster size preferrably 1024 KB**.
+**Choose a large cluster size preferrably 1024 KB**. For some reason `lite_config.txt` does not work on large cluster sizes. Prepare to use a second SD-card for that or use Wi-Fi app.
 
 ### Choose an SD card rated for high IOPS
 Buy an **application performance-class rated SD-card**. There are two classes, A1 and A2. A2 is advertised to be faster, but **DO NOT BUY A2 CLASS CARDS**.
