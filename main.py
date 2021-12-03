@@ -1,3 +1,6 @@
+import sys
+import argparse
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,11 +8,19 @@ import scipy.interpolate as spi
 import scipy.signal as ssi
 from numpy.lib.stride_tricks import sliding_window_view
 import scipy.io.wavfile
+
 import camio
-import sys
 import find_sync
 
-hawk_raw = camio.read_hawk(sys.argv[1])
+parser = argparse.ArgumentParser()
+
+parser.add_argument('input_file', type = str, help = "CSV file straight from the camera")
+parser.add_argument('output_file', type = str, help = "Output file name")
+parser.add_argument('--flip-xy', action = 'store_true', help ="Flip the signs of X and Y gyro data")
+
+args = parser.parse_args()
+
+hawk_raw = camio.read_hawk(args.input_file)
 hawk_data = find_sync.fix_sync(hawk_raw)
 
 #hawk_data = hawk_data[:,118056:120556]
@@ -117,7 +128,14 @@ new_z = np.interp(new_ts, hawk_data[0], hawk_data[3])
 
 new_data = np.vstack((new_ts, new_x, new_y, new_z))
 
-camio.write_hawk(sys.argv[2], new_data)
+if (args.flip_xy):
+    print("Flipping signs on X and Y gyro data")
+    new_data[1,:] *= -1
+    new_data[2,:] *= -1
+else:
+    print("Not flipping signs on X and Y gyro data. You may have to do it later yourself. Or try --flip-xy.")
+
+camio.write_hawk(args.output_file, new_data)
 
 plt.figure(figsize=(20,5))
 plt.plot(hawk_data[0], hawk_data[1], '-')
