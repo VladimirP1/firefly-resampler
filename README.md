@@ -1,3 +1,7 @@
+# THIS repo contents are OBSOLETE
+Hawkeye has released a new firmware v4.0. Gyro logs from this firmware do not have holes in them, so these scripts will only make the data worse.
+The data is still non-ideal (it has some nasty spikes if you hard-mount the camera to a drone), but more or less usable if the camera is soft-mounted.
+
 ## What is this
 
 Hawkeye is making a great for its cost 'naked' camera with gyro data logging.
